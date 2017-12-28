@@ -61,7 +61,7 @@ def get_request():
 
     return method, headers, body
 
-def make_response(result, content_type=None):
+def make_response(status, result, content_type=None):
     """Makes the http response
 
     Returns:
@@ -69,7 +69,7 @@ def make_response(result, content_type=None):
     """
     response = ""
     # Add headers
-    response += "HTTP/1.1 {}{}".format("200 OK", SEPARATOR)
+    response += "HTTP/1.1 {}{}".format(status, SEPARATOR)
     response += "Content-Length: {}{}".format(len(result), SEPARATOR)
     if content_type:
         response += "Content-Type: {}{}".format(content_type, SEPARATOR)
@@ -88,12 +88,16 @@ def parse():
     Writes the function's response to stdout
     """
     while True:
-        # Get the incoming request
-        method, headers, body = get_request()
-        # Call the function
-        result = handler.handle(body)
-        # Make response
-        response = make_response(result, "text/plain")
+        try:
+            # Get the incoming request
+            method, headers, body = get_request()
+            # Call the function
+            result = handler.handle(body)
+            # Make response
+            response = make_response("200 OK", result, "text/plain")
+        except BaseException as e:
+            # Make response
+            response = make_response("500", "Internal Error: {}".format(" ".join(e.args)), "text/plain")
         # Write response to stdout
         sys.stdout.write(response)
         sys.stdout.flush()
