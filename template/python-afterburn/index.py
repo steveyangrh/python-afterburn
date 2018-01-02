@@ -1,9 +1,17 @@
 """python template for running in afterburn mode"""
 
 import sys
+import os
 from function import handler
 
 SEPARATOR = "\r\n"
+HTTP_METHODS = ['POST']
+
+class MalformedRequestError(Exception):
+    """Custom Exception to handle Malformed Http requests"""
+    def __init__(self, message):
+        super(MalformedRequestError, self).__init__(message)
+        self.message = message
 
 def parse_header():
     """Reads the http headers from watchdog over stdin
@@ -27,6 +35,12 @@ def parse_header():
             continue
         # Parse rest of the lines for key, value
         parts = header.split(':')
+        
+        # Ignoring the dirty headers(for now). If we decide to throw the exception,
+        # we have to do it after reading the body to keep the next request clean
+        if len(parts) < 2:
+            continue
+        
         headers[parts[0]] = ''.join(parts[1:])
 
     return method, headers
@@ -58,6 +72,9 @@ def get_request():
 
     content_length = int(headers['Content-Length'])
     body = sys.stdin.read(content_length)
+
+    if method not in HTTP_METHODS:
+        raise MalformedRequestError('Unrecognised Http method')
 
     return method, headers, body
 
@@ -95,9 +112,15 @@ def parse():
             result = handler.handle(body)
             # Make response
             response = make_response("200 OK", result, "text/plain")
-        except BaseException as e:
-            # Make response
-            response = make_response("500", "Internal Error: {}".format(" ".join(e.args)), "text/plain")
+        except MalformedRequestError as error:
+            result = "Malformed Request: {}".format(" ".join(error.args))
+            response = make_response("400 Bad Request", result, "text/plain")
+        except KeyboardInterrupt:
+            os.remove("/tmp/.lock")
+            sys.exit(1)
+        except BaseException as error:
+            result = "Internal Error: {}".format(" ".join(error.args))
+            response = make_response("500", result, "text/plain")
         # Write response to stdout
         sys.stdout.write(response)
         sys.stdout.flush()
